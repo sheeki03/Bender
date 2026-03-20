@@ -1,4 +1,6 @@
 const { addonBuilder } = require('stremio-addon-sdk');
+const { recBuildLock } = require('./utils/buildLock');
+const { ALL_GENRES } = require('./utils/genres');
 
 const manifest = {
   id: "community.bender",
@@ -35,53 +37,6 @@ const manifest = {
 };
 
 const builder = new addonBuilder(manifest);
-
-// ---------------------------------------------------------------------------
-// TMDB genre lookups
-// ---------------------------------------------------------------------------
-
-const TMDB_MOVIE_GENRES = {
-  28: 'Action',
-  12: 'Adventure',
-  16: 'Animation',
-  35: 'Comedy',
-  80: 'Crime',
-  99: 'Documentary',
-  18: 'Drama',
-  10751: 'Family',
-  14: 'Fantasy',
-  36: 'History',
-  27: 'Horror',
-  10402: 'Music',
-  9648: 'Mystery',
-  10749: 'Romance',
-  878: 'Science Fiction',
-  10770: 'TV Movie',
-  53: 'Thriller',
-  10752: 'War',
-  37: 'Western'
-};
-
-const TMDB_TV_GENRES = {
-  10759: 'Action & Adventure',
-  16: 'Animation',
-  35: 'Comedy',
-  80: 'Crime',
-  99: 'Documentary',
-  18: 'Drama',
-  10751: 'Family',
-  10762: 'Kids',
-  9648: 'Mystery',
-  10763: 'News',
-  10764: 'Reality',
-  10765: 'Sci-Fi & Fantasy',
-  10766: 'Soap',
-  10767: 'Talk',
-  10768: 'War & Politics',
-  37: 'Western'
-};
-
-const ALL_GENRES = Object.assign({}, TMDB_MOVIE_GENRES, TMDB_TV_GENRES);
 
 // ---------------------------------------------------------------------------
 // Helper: genreNameMatches
@@ -230,6 +185,10 @@ async function runPipeline(install, type, db, decrypt, resolveTarget) {
     merged = mergeLibraries(merged, p);
   }
 
+  if (merged.length === 0 && (install.stremioAuthKeyEnc || install.traktAccessTokenEnc)) {
+    console.warn('[pipeline] No library data from any configured source — falling back to cold start');
+  }
+
   // Annotate with ratings
   const { mergedItems, profileOnlyItems } = annotateRatings(merged, traktRatings);
 
@@ -344,6 +303,71 @@ async function captureFreshness(install, decrypt) {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: executePipelineAndCache
+// ---------------------------------------------------------------------------
+
+async function executePipelineAndCache(install, type, db, decrypt, requiredDepth, requiredTier, installId) {
+  const result = await runPipeline(install, type, db, decrypt, requiredDepth);
+  const freshnessData = await captureFreshness(install, decrypt);
+  db.setCachedRecs(
+    installId,
+    type,
+    JSON.stringify(result.candidates),
+    JSON.stringify(freshnessData),
+    result.candidates.length,
+    requiredTier,
+    result.buildOk ? 1 : 0
+  );
+  db.setFreshness(installId, type, freshnessData);
+  return result.candidates;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: isCacheAdequate
+// ---------------------------------------------------------------------------
+
+function isCacheAdequate(cached, requiredDepth, requiredTier) {
+  if (!cached) return false;
+  return cached.buildDepth >= requiredDepth
+    || (cached.buildBudget >= requiredTier && cached.buildOk);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: acquireAndBuild
+//
+// Acquires the build lock for the given key. If we become the owner, runs
+// the pipeline (after a cache re-check to avoid redundant work). If we are
+// a waiter, returns the result from the owner. Returns null on waiter failure.
+// ---------------------------------------------------------------------------
+
+async function acquireAndBuild(lockKey, install, type, db, decrypt, requiredDepth, requiredTier, installId) {
+  const lock = await recBuildLock.acquireOrWait(lockKey);
+
+  if (!lock.isOwner) {
+    const waited = await lock.promise;
+    return waited || null;
+  }
+
+  try {
+    // Re-check cache: another concurrent request may have already rebuilt
+    const re = db.getCachedRecs(installId, type);
+    const staleThreshold = Math.floor(Date.now() / 1000) - 21600;
+    if (re && re.computedAt > staleThreshold && isCacheAdequate(re, requiredDepth, requiredTier)) {
+      const candidates = JSON.parse(re.rankedJson);
+      lock.release(candidates);
+      return candidates;
+    }
+
+    const candidates = await executePipelineAndCache(install, type, db, decrypt, requiredDepth, requiredTier, installId);
+    lock.release(candidates);
+    return candidates;
+  } catch (err) {
+    lock.release(null);
+    throw err;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helper: enrichPage
 // ---------------------------------------------------------------------------
 
@@ -356,20 +380,18 @@ async function enrichPage(candidates, type) {
       meta = await getMeta(type, candidate.imdbId);
     } catch (_) { /* fall back to TMDB data */ }
 
-    const poster = (meta && meta.poster) || posterUrl(candidate.poster_path);
+    const poster = meta?.poster || posterUrl(candidate.poster_path);
 
     return {
       id: candidate.imdbId,
       type: type,
-      name: (meta && meta.name) || candidate.name || '',
+      name: meta?.name || candidate.name || '',
       poster: poster || '',
       posterShape: 'poster',
-      description: (meta && meta.description) || '',
-      releaseInfo: (meta && meta.releaseInfo) ||
-        (candidate.release_date || '').substring(0, 4),
-      imdbRating: (meta && meta.imdbRating) ||
-        String(candidate.vote_average || ''),
-      genres: (meta && meta.genres) || []
+      description: meta?.description || '',
+      releaseInfo: meta?.releaseInfo || (candidate.release_date || '').substring(0, 4),
+      imdbRating: meta?.imdbRating || (candidate.vote_average != null ? String(candidate.vote_average) : ''),
+      genres: meta?.genres || []
     };
   }));
 
@@ -383,17 +405,16 @@ async function enrichPage(candidates, type) {
 // ---------------------------------------------------------------------------
 
 builder.defineCatalogHandler(async (args) => {
-  const installId = args.config && args.config.installId;
+  const installId = args.config?.installId;
   if (!installId) return { metas: [] };
 
   const db = require('./db');
   const { decrypt } = require('./utils/crypto');
   const { refreshIfNeeded } = require('./auth/trakt');
-  const { recBuildLock } = require('./utils/buildLock');
 
   const type = args.type; // "movie" or "series"
-  const skip = parseInt(args.extra && args.extra.skip, 10) || 0;
-  const genre = args.extra && args.extra.genre;
+  const skip = parseInt(args.extra?.skip, 10) || 0;
+  const genre = args.extra?.genre;
   const PAGE_SIZE = 100;
   const MAX_DEPTH = 1200;
   if (skip >= MAX_DEPTH) return { metas: [] };
@@ -451,9 +472,7 @@ builder.defineCatalogHandler(async (args) => {
 
       if (!needsRebuild) {
         // Check depth and tier adequacy
-        const depthOk = cached.buildDepth >= requiredDepth;
-        const sameTierClean = cached.buildBudget >= requiredTier && cached.buildOk;
-        if (depthOk || sameTierClean) {
+        if (isCacheAdequate(cached, requiredDepth, requiredTier)) {
           candidates = JSON.parse(cached.rankedJson);
         } else {
           needsRebuild = true;
@@ -465,70 +484,15 @@ builder.defineCatalogHandler(async (args) => {
 
     // 4. Full pipeline (on cache miss)
     if (needsRebuild) {
-      const lockResult = await recBuildLock.acquireOrWait(`${installId}:${type}`);
-      if (lockResult.isOwner) {
-        try {
-          const result = await runPipeline(install, type, db, decrypt, requiredDepth);
-          candidates = result.candidates;
-          const freshnessData = await captureFreshness(install, decrypt);
-          db.setCachedRecs(
-            installId,
-            type,
-            JSON.stringify(candidates),
-            JSON.stringify(freshnessData),
-            candidates.length,
-            requiredTier,
-            result.buildOk ? 1 : 0
-          );
-          db.setFreshness(installId, type, freshnessData);
-          lockResult.release(candidates);
-        } catch (err) {
-          lockResult.release(null);
-          throw err;
-        }
-      } else {
-        candidates = await lockResult.promise;
+      const lockKey = `${installId}:${type}`;
+      candidates = await acquireAndBuild(lockKey, install, type, db, decrypt, requiredDepth, requiredTier, installId);
+      if (!candidates) return { metas: [] };
+
+      // If we were a waiter and the completed build is insufficient, try again
+      const after = db.getCachedRecs(installId, type);
+      if (!isCacheAdequate(after, requiredDepth, requiredTier)) {
+        candidates = await acquireAndBuild(lockKey, install, type, db, decrypt, requiredDepth, requiredTier, installId);
         if (!candidates) return { metas: [] };
-        // Check if the build that just finished is adequate for our depth
-        const after = db.getCachedRecs(installId, type);
-        const afterOk = after && (after.buildDepth >= requiredDepth
-          || (after.buildBudget >= requiredTier && after.buildOk));
-        if (!afterOk) {
-          // Need a deeper build
-          const deep = await recBuildLock.acquireOrWait(`${installId}:${type}`);
-          if (deep.isOwner) {
-            try {
-              // Re-check cache (another waiter may have rebuilt)
-              const re = db.getCachedRecs(installId, type);
-              const staleThreshold = Math.floor(Date.now() / 1000) - 21600;
-              if (re && re.computedAt > staleThreshold
-                  && (re.buildDepth >= requiredDepth || (re.buildBudget >= requiredTier && re.buildOk))) {
-                candidates = JSON.parse(re.rankedJson);
-              } else {
-                const result = await runPipeline(install, type, db, decrypt, requiredDepth);
-                candidates = result.candidates;
-                const freshnessData = await captureFreshness(install, decrypt);
-                db.setCachedRecs(
-                  installId,
-                  type,
-                  JSON.stringify(candidates),
-                  JSON.stringify(freshnessData),
-                  candidates.length,
-                  requiredTier,
-                  result.buildOk ? 1 : 0
-                );
-                db.setFreshness(installId, type, freshnessData);
-              }
-              deep.release(candidates);
-            } catch (err) {
-              deep.release(null);
-              throw err;
-            }
-          } else {
-            candidates = await deep.promise;
-            if (!candidates) return { metas: [] };
-          }
-        }
       }
     }
 
@@ -559,19 +523,7 @@ builder.defineCatalogHandler(async (args) => {
 });
 
 // ---------------------------------------------------------------------------
-// Install URL helper
-// ---------------------------------------------------------------------------
-
-function stremioInstallUrl(baseUrl, installId) {
-  const host = baseUrl.replace(/^https?:\/\//, '');
-  const configJson = JSON.stringify({ installId });
-  const encoded = encodeURIComponent(configJson);
-  return `stremio://${host}/${encoded}/manifest.json`;
-}
-
-// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
 module.exports = builder;
-module.exports.stremioInstallUrl = stremioInstallUrl;

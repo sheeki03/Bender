@@ -1,3 +1,4 @@
+'use strict';
 require('dotenv').config();
 
 const express = require('express');
@@ -18,6 +19,10 @@ try {
   console.error('Startup failed:', err.message);
   process.exit(1);
 }
+
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
 
 const app = express();
 
@@ -40,7 +45,8 @@ app.use('/admin', adminRoutes);
 app.use('/', getRouter(addon.getInterface()));
 
 app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err.message);
+  console.error('Unhandled error:', err.stack || err.message);
+  if (res.headersSent) return next(err);
   res.status(500).json({ error: 'Internal server error' });
 });
 

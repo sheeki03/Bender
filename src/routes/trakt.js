@@ -152,7 +152,8 @@ router.get('/callback', async (req, res) => {
       res.redirect(`${basePath}/configure?installId=${pending.installId}`);
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[trakt/callback]', err.message);
+    res.status(500).json({ error: 'Failed to complete Trakt authorization. Please try again.' });
   }
 });
 

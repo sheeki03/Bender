@@ -1,3 +1,5 @@
+'use strict';
+
 const crypto = require('crypto');
 const { config } = require('../config');
 
@@ -34,7 +36,14 @@ function encrypt(plaintext) {
  * @returns {string} plaintext
  */
 function decrypt(encrypted) {
-  const [ivHex, ciphertextHex, tagHex] = encrypted.split(':');
+  if (!encrypted || typeof encrypted !== 'string') {
+    throw new Error('decrypt: invalid input — expected non-empty string');
+  }
+  const parts = encrypted.split(':');
+  if (parts.length !== 3) {
+    throw new Error('decrypt: malformed ciphertext — expected format iv:ciphertext:tag');
+  }
+  const [ivHex, ciphertextHex, tagHex] = parts;
   const key = Buffer.from(config.encryptionKey, 'hex');
   const iv = Buffer.from(ivHex, 'hex');
   const ciphertext = Buffer.from(ciphertextHex, 'hex');

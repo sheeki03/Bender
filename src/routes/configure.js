@@ -132,7 +132,19 @@ router.post('/api/install/stremio', async (req, res) => {
 
     res.json({ ok: true });
   } catch (err) {
-    res.status(401).json({ error: err.message });
+    const msg = err.message || '';
+    // Infrastructure: non-JSON response from proxy/CDN, or network failure
+    if (msg.includes('non-JSON response') || msg.includes('fetch failed') || msg.includes('ECONNREFUSED')) {
+      console.error('[configure] Stremio API unreachable:', msg);
+      return res.status(502).json({ error: 'Stremio service is temporarily unavailable' });
+    }
+    // Credential failures from login() — Stremio's data.error messages
+    if (msg.includes('Login failed') || msg.includes('Invalid credentials') || msg.includes('Invalid email') || msg.includes('Invalid password')) {
+      return res.status(401).json({ error: 'Invalid Stremio credentials' });
+    }
+    // Everything else (DB, crypto) is a server error
+    console.error('[configure] /api/install/stremio error:', msg);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

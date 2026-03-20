@@ -1,8 +1,9 @@
 'use strict';
 
-const { mergeLibraries, normalizeStremioLibrary, normalizeTraktMovies, normalizeTraktShows, getMaxLastWatched } = require('./library');
+// Note: library normalization/merge functions are used in addon.js, not here.
 const { getMeta, enrichMetas } = require('./cinemeta');
 const { findByImdbId, getRecommendationsPaged, getSimilarPaged, getExternalIds, discoverPaged, getTrendingPaged, posterUrl, mapType } = require('./tmdb');
+const { TMDB_GENRE_MAP } = require('../utils/genres');
 
 const DEBUG = !!process.env.RECOMMENDER_DEBUG;
 
@@ -144,33 +145,15 @@ function buildProfile(seeds, type, profileOnlySeeds = []) {
   let yearWeightTotal = 0;
   let yearSqSum = 0;
 
-  for (const seed of seeds) {
-    const engagement = seed._engagement || 0;
-    const genres = (seed.meta && seed.meta.genres) || [];
-    const skipSignal = (seed.engagement && seed.engagement.skipSignal) || 0;
-    const traktRating = (seed.engagement && seed.engagement.traktRating);
-
-    // Recency weighting (watched seeds only)
-    const lastWatched = seed.engagement && seed.engagement.lastWatched;
-    const daysSince = lastWatched
-      ? Math.max(0, (Date.now() - new Date(lastWatched).getTime()) / (1000 * 60 * 60 * 24))
-      : 365;
-    const recencyWeight = Math.pow(0.5, daysSince / 180);
-
-    let weight = engagement * recencyWeight;
-    // Skip signal dampens genre contribution
-    weight *= (1 - skipSignal * 0.5);
-    // Trakt rating boosts seed weight
-    if (traktRating != null) {
-      weight *= (1 + traktRating * 0.3);
-    }
+  // Accumulate genre, combo, and year signals from a seed with a given weight
+  function accumulateSeed(seed, weight) {
+    const genres = seed.meta?.genres || [];
 
     for (const genre of genres) {
       const g = typeof genre === 'string' ? genre : String(genre);
       genreRaw[g] = (genreRaw[g] || 0) + weight;
     }
 
-    // Genre combo affinity (sorted pairs)
     const sortedGenres = genres.map(g => typeof g === 'string' ? g : String(g)).sort();
     for (let i = 0; i < sortedGenres.length; i++) {
       for (let j = i + 1; j < sortedGenres.length; j++) {
@@ -180,8 +163,7 @@ function buildProfile(seeds, type, profileOnlySeeds = []) {
       }
     }
 
-    // Year affinity (continuous)
-    const year = parseYear(seed.meta && seed.meta.releaseInfo);
+    const year = parseYear(seed.meta?.releaseInfo);
     if (year) {
       yearWeightedSum += year * weight;
       yearSqSum += year * year * weight;
@@ -189,32 +171,32 @@ function buildProfile(seeds, type, profileOnlySeeds = []) {
     }
   }
 
+  // Watched seeds: weight derived from engagement, recency, skip signal, and rating
+  for (const seed of seeds) {
+    const engagement = seed._engagement || 0;
+    const skipSignal = seed.engagement?.skipSignal || 0;
+    const traktRating = seed.engagement?.traktRating;
+
+    const lastWatched = seed.engagement?.lastWatched;
+    const daysSince = lastWatched
+      ? Math.max(0, (Date.now() - new Date(lastWatched).getTime()) / (1000 * 60 * 60 * 24))
+      : 365;
+    const recencyWeight = Math.pow(0.5, daysSince / 180);
+
+    let weight = engagement * recencyWeight;
+    weight *= (1 - skipSignal * 0.5);
+    if (traktRating != null) {
+      weight *= (1 + traktRating * 0.3);
+    }
+
+    accumulateSeed(seed, weight);
+  }
+
   // Profile-only seeds (already decayed via profileWeight)
   for (const seed of profileOnlySeeds) {
     const pw = seed._profileWeight || 0;
     if (pw <= 0) continue;
-    const genres = (seed.meta && seed.meta.genres) || [];
-
-    for (const genre of genres) {
-      const g = typeof genre === 'string' ? genre : String(genre);
-      genreRaw[g] = (genreRaw[g] || 0) + pw;
-    }
-
-    const sortedGenres = genres.map(g => typeof g === 'string' ? g : String(g)).sort();
-    for (let i = 0; i < sortedGenres.length; i++) {
-      for (let j = i + 1; j < sortedGenres.length; j++) {
-        const combo = `${sortedGenres[i]}|${sortedGenres[j]}`;
-        genreComboRaw[combo] = (genreComboRaw[combo] || 0) + pw;
-        genreComboSupport[combo] = (genreComboSupport[combo] || 0) + 1;
-      }
-    }
-
-    const year = parseYear(seed.meta && seed.meta.releaseInfo);
-    if (year) {
-      yearWeightedSum += year * pw;
-      yearSqSum += year * year * pw;
-      yearWeightTotal += pw;
-    }
+    accumulateSeed(seed, pw);
   }
 
   // Normalize genre affinity so max = 1.0
@@ -267,9 +249,12 @@ function buildProfile(seeds, type, profileOnlySeeds = []) {
 
   // Per-user calibration (narrowness)
   const affinityValues = Object.values(genreAffinity);
-  const affinityStd = affinityValues.length > 1
-    ? Math.sqrt(affinityValues.reduce((s, v) => s + (v - affinityValues.reduce((a, b) => a + b, 0) / affinityValues.length) ** 2, 0) / affinityValues.length)
-    : 0;
+  let affinityStd = 0;
+  if (affinityValues.length > 1) {
+    const affinityMean = affinityValues.reduce((s, v) => s + v, 0) / affinityValues.length;
+    const affinityVariance = affinityValues.reduce((s, v) => s + (v - affinityMean) ** 2, 0) / affinityValues.length;
+    affinityStd = Math.sqrt(affinityVariance);
+  }
   const narrowness = Math.min(affinityStd / 0.4, 1.0);
 
   return {
@@ -293,22 +278,6 @@ function parseYear(releaseInfo) {
   return match ? parseInt(match[1], 10) : null;
 }
 
-// ---------------------------------------------------------------------------
-// TMDB genre ID → name mapping (for affinity lookup)
-// ---------------------------------------------------------------------------
-
-// Standard TMDB genre IDs for movies and TV
-const TMDB_GENRE_MAP = {
-  28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy',
-  80: 'Crime', 99: 'Documentary', 18: 'Drama', 10751: 'Family',
-  14: 'Fantasy', 36: 'History', 27: 'Horror', 10402: 'Music',
-  9648: 'Mystery', 10749: 'Romance', 878: 'Science Fiction', 53: 'Thriller',
-  10752: 'War', 37: 'Western', 10770: 'TV Movie',
-  10759: 'Action & Adventure', 10762: 'Kids', 10763: 'News',
-  10764: 'Reality', 10765: 'Sci-Fi & Fantasy',
-  10766: 'Soap', 10767: 'Talk', 10768: 'War & Politics',
-};
-
 /**
  * Map a TMDB genre_id to a genre name usable for affinity lookup.
  */
@@ -323,14 +292,11 @@ function tmdbGenreName(genreId) {
 function preResolutionScore(candidate, profile) {
   const genreIds = candidate.genre_ids || [];
   let genreSum = 0;
-  let genreCount = 0;
   for (const gid of genreIds) {
     const gname = tmdbGenreName(gid);
-    const aff = profile.genreAffinity[gname];
-    genreSum += aff != null ? aff : 0.5;
-    genreCount++;
+    genreSum += profile.genreAffinity[gname] != null ? profile.genreAffinity[gname] : 0.5;
   }
-  const genreMatch = genreCount > 0 ? genreSum / genreCount : 0.5;
+  const genreMatch = genreIds.length > 0 ? genreSum / genreIds.length : 0.5;
 
   const candYear = parseYear(candidate.release_date);
   let yearMatch = 0.5;
@@ -357,7 +323,8 @@ function itemSimilarity(a, b) {
   const genreJaccard = union > 0 ? intersection / union : 0;
 
   // Franchise match
-  const franchiseMatch = (franchisePrefix(a.name) && franchisePrefix(a.name) === franchisePrefix(b.name)) ? 1 : 0;
+  const aPrefix = franchisePrefix(a.name);
+  const franchiseMatch = (aPrefix && aPrefix === franchisePrefix(b.name)) ? 1 : 0;
 
   // Year proximity
   const aYear = parseYear(a.release_date);
@@ -376,7 +343,7 @@ function itemSimilarity(a, b) {
  *
  * @param {object[]} libraryItems - Normalized, merged library items.
  * @param {string}   type         - "movie" or "series".
- * @param {object}   opts         - Options: { profileOnlyItems, resolveTarget }.
+ * @param {object}   opts         - Options: { profileOnlyItems: object[] (rated-only items), resolveTarget: number (max candidates to resolve, controls tier depth; default 300) }.
  * @returns {Promise<{candidates: object[], hadSourceFailures: boolean}>}
  */
 async function buildRecommendations(libraryItems, type, opts = {}) {
@@ -713,23 +680,14 @@ function addCandidate(map, item, source, tmdbType) {
 function scoreCandidateItem(candidate, profile, debug = false) {
   const { genreAffinity, genreComboAffinity, yearMean, yearSigma, userConfidence, narrowness } = profile;
 
-  // genreMatch: average of affinity values for candidate's genres
+  // genreMatch: average of affinity values for candidate's genres (unseen genres default to 0.5)
   const genreIds = candidate.genre_ids || [];
   let genreSum = 0;
-  let genreCount = 0;
   for (const gid of genreIds) {
     const gname = tmdbGenreName(gid);
-    const aff = genreAffinity[gname];
-    if (aff != null) {
-      genreSum += aff;
-      genreCount++;
-    } else {
-      // Unseen genre → neutral 0.5
-      genreSum += 0.5;
-      genreCount++;
-    }
+    genreSum += genreAffinity[gname] != null ? genreAffinity[gname] : 0.5;
   }
-  const singleMatch = genreCount > 0 ? genreSum / genreCount : 0.5;
+  const singleMatch = genreIds.length > 0 ? genreSum / genreIds.length : 0.5;
 
   // Genre combo affinity
   let genreMatch = singleMatch;
@@ -836,17 +794,16 @@ function franchiseSoftPenalty(candidates) {
   return candidates;
 }
 
+// Precomputed reverse lookup: genre name -> TMDB genre ID
+const TMDB_GENRE_NAME_TO_ID = Object.fromEntries(
+  Object.entries(TMDB_GENRE_MAP).map(([id, name]) => [name, Number(id)])
+);
+
 /**
  * Reverse-lookup TMDB genre ID from a genre name string.
  */
 function findTmdbGenreId(genreName) {
-  for (const [id, name] of Object.entries(TMDB_GENRE_MAP)) {
-    if (name === genreName) {
-      const num = Number(id);
-      if (Number.isInteger(num)) return num;
-    }
-  }
-  return null;
+  return TMDB_GENRE_NAME_TO_ID[genreName] || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -917,6 +874,7 @@ async function coldStart(tmdbType, trendingPages = 1) {
             genre_ids: item.genre_ids || [],
             name: item.title || item.name || null,
             vote_average: item.vote_average || 0,
+            vote_count: item.vote_count || 0,
             poster_path: item.poster_path || null,
             release_date: item.release_date || item.first_air_date || null,
           };

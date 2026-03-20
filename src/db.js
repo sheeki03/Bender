@@ -203,9 +203,9 @@ function getCachedRecs(installId, type) {
     rankedJson: row.ranked_json,
     computedAt: row.computed_at,
     libraryFreshness: row.library_freshness,
-    buildDepth: row.build_depth,
-    buildBudget: row.build_budget,
-    buildOk: row.build_ok,
+    buildDepth: row.build_depth || 0,
+    buildBudget: row.build_budget || 0,
+    buildOk: !!row.build_ok,
   };
 }
 

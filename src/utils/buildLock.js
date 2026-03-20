@@ -1,5 +1,14 @@
 'use strict';
 
+/**
+ * Single-flight lock for expensive async operations.
+ *
+ * When multiple callers request the same key concurrently, only the first
+ * (the "owner") executes the operation. Subsequent callers ("waiters")
+ * receive the owner's result via a shared promise. A safety timeout
+ * rejects waiters and clears the lock if the owner never releases.
+ */
+
 const SAFETY_TIMEOUT_MS = 120_000;
 
 class BuildLock {

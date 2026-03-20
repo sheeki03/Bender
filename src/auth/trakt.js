@@ -78,7 +78,7 @@ async function exchangeCode(code) {
 
 /**
  * Refresh an expired (or expiring) token.
- * @param {string} refreshToken
+ * @param {string} token - The refresh token to exchange
  * @returns {Promise<{access_token: string, refresh_token: string, expires_in: number, created_at: number}>}
  */
 async function refreshToken(token) {
@@ -117,7 +117,7 @@ async function refreshToken(token) {
  *   - encrypt(plaintext)    – encrypt a string for storage
  *
  * @param {object} install – DB row with traktExpiresAt, traktRefreshTokenEnc, etc.
- * @param {{getInstall: Function, updateInstall: Function, encrypt: Function}} deps
+ * @param {{getInstall: Function, updateInstall: Function, encrypt: Function, decrypt: Function}} deps
  * @returns {Promise<object>} the (potentially refreshed) install
  */
 async function refreshIfNeeded(install, { getInstall, updateInstall, encrypt, decrypt }) {
@@ -155,15 +155,20 @@ async function refreshIfNeeded(install, { getInstall, updateInstall, encrypt, de
 
 /**
  * Paginate through a Trakt list endpoint, accumulating all pages.
+ * When maxPages is Infinity (the default), fetches all available pages.
  * @param {string} url – base URL (without page/limit params)
  * @param {string} accessToken
+ * @param {number} maxPages – stop after this many pages (default: all)
  * @returns {Promise<Array>}
  */
-async function paginateTrakt(url, accessToken) {
+const ABSOLUTE_PAGE_LIMIT = 500;
+
+async function paginateTrakt(url, accessToken, maxPages = Infinity) {
+  const effectiveMax = Math.min(maxPages, ABSOLUTE_PAGE_LIMIT);
   const results = [];
   let page = 1;
 
-  while (true) {
+  while (page <= effectiveMax) {
     const separator = url.includes('?') ? '&' : '?';
     const pagedUrl = `${url}${separator}page=${page}&limit=100`;
 
@@ -178,44 +183,10 @@ async function paginateTrakt(url, accessToken) {
     }
 
     const data = await res.json();
-    results.push(...data);
-
-    const totalPages = parseInt(res.headers.get('X-Pagination-Page-Count'), 10) || 1;
-    if (page >= totalPages) {
-      break;
+    if (!Array.isArray(data)) {
+      throw new Error(`Trakt API returned non-array response on page ${page}`);
     }
-    page++;
-  }
-
-  return results;
-}
-
-/**
- * Paginate through a Trakt list endpoint, up to a maximum number of pages.
- * @param {string} url – base URL (without page/limit params)
- * @param {string} accessToken
- * @param {number} maxPages – stop after this many pages
- * @returns {Promise<Array>}
- */
-async function paginateTraktCapped(url, accessToken, maxPages) {
-  const results = [];
-  let page = 1;
-
-  while (page <= maxPages) {
-    const separator = url.includes('?') ? '&' : '?';
-    const pagedUrl = `${url}${separator}page=${page}&limit=100`;
-
-    const res = await fetch(pagedUrl, {
-      method: 'GET',
-      headers: traktHeaders(accessToken),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Trakt API request failed (${res.status}): ${text}`);
-    }
-
-    const data = await res.json();
+    if (data.length === 0) break;
     results.push(...data);
 
     const totalPages = parseInt(res.headers.get('X-Pagination-Page-Count'), 10) || 1;
@@ -250,7 +221,7 @@ async function fetchWatchedShows(accessToken) {
  * @returns {Promise<Array>}
  */
 async function fetchRatedMovies(accessToken) {
-  return paginateTraktCapped(
+  return paginateTrakt(
     `${TRAKT_API_BASE}/users/me/ratings/movies?sort=rated&sort_how=desc`,
     accessToken,
     5,
@@ -263,7 +234,7 @@ async function fetchRatedMovies(accessToken) {
  * @returns {Promise<Array>}
  */
 async function fetchRatedShows(accessToken) {
-  return paginateTraktCapped(
+  return paginateTrakt(
     `${TRAKT_API_BASE}/users/me/ratings/shows?sort=rated&sort_how=desc`,
     accessToken,
     5,
@@ -305,7 +276,7 @@ module.exports = {
   exchangeCode,
   refreshToken,
   refreshIfNeeded,
-  paginateTraktCapped,
+  paginateTrakt,
   fetchWatchedMovies,
   fetchWatchedShows,
   fetchRatedMovies,

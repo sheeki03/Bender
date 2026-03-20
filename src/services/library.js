@@ -87,28 +87,31 @@ function normalizeStremioLibrary(items) {
 }
 
 // ---------------------------------------------------------------------------
-// normalizeTraktMovies
+// normalizeTraktItems (shared logic for movies and shows)
 // ---------------------------------------------------------------------------
 
-function normalizeTraktMovies(items) {
+/**
+ * Normalize a Trakt watched list into the common library format.
+ * @param {Array}  items    - Raw Trakt API response items.
+ * @param {string} innerKey - Key on each item containing the media object ("movie" or "show").
+ * @param {string} type     - Normalized type for output ("movie" or "series").
+ */
+function normalizeTraktItems(items, innerKey, type) {
   if (!Array.isArray(items)) return [];
 
   return items
-    .filter(
-      (item) =>
-        item &&
-        item.movie &&
-        item.movie.ids &&
-        item.movie.ids.imdb
-    )
+    .filter((item) => {
+      const inner = item && item[innerKey];
+      return inner && inner.ids && inner.ids.imdb;
+    })
     .map((item) => {
-      const movie = item.movie;
+      const inner = item[innerKey];
       const plays = item.plays || 0;
 
       return {
-        imdbId: movie.ids.imdb,
-        name: movie.title || null,
-        type: "movie",
+        imdbId: inner.ids.imdb,
+        name: inner.title || null,
+        type,
         poster: null,
         sources: ["trakt"],
         engagement: {
@@ -126,44 +129,12 @@ function normalizeTraktMovies(items) {
     });
 }
 
-// ---------------------------------------------------------------------------
-// normalizeTraktShows
-// ---------------------------------------------------------------------------
+function normalizeTraktMovies(items) {
+  return normalizeTraktItems(items, 'movie', 'movie');
+}
 
 function normalizeTraktShows(items) {
-  if (!Array.isArray(items)) return [];
-
-  return items
-    .filter(
-      (item) =>
-        item &&
-        item.show &&
-        item.show.ids &&
-        item.show.ids.imdb
-    )
-    .map((item) => {
-      const show = item.show;
-      const plays = item.plays || 0;
-
-      return {
-        imdbId: show.ids.imdb,
-        name: show.title || null,
-        type: "series",
-        poster: null,
-        sources: ["trakt"],
-        engagement: {
-          timesWatched: plays,
-          overallTimeWatched: 0,
-          duration: 0,
-          timeOffset: 0,
-          lastWatched: item.last_watched_at
-            ? new Date(item.last_watched_at)
-            : null,
-          flaggedWatched: 0,
-          completionRate: plays > 0 ? 1.0 : 0,
-        },
-      };
-    });
+  return normalizeTraktItems(items, 'show', 'series');
 }
 
 // ---------------------------------------------------------------------------
@@ -188,7 +159,7 @@ function mergeLibraries(stremioItems, traktItems) {
       continue;
     }
 
-    // Merge: existing is from Stremio, traktItem is from Trakt.
+    // Merge: prefer existing item's Stremio-sourced engagement fields.
     const sEng = existing.engagement;
     const tEng = traktItem.engagement;
 
