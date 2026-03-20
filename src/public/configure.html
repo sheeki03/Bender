@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bender - Configure</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 2rem 1rem 4rem;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #fff;
+    }
+
+    .header p {
+      font-size: 0.95rem;
+      color: #aaa;
+    }
+
+    /* State containers */
+    .state { display: none; }
+    .state.active { display: block; }
+
+    /* Cards */
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .card h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card p {
+      font-size: 0.9rem;
+      color: #bbb;
+      margin-bottom: 1rem;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.7rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, opacity 0.2s, transform 0.1s;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-primary { background: #e94560; }
+    .btn-secondary { background: #0f3460; }
+    .btn-danger { background: #c0392b; }
+    .btn-small { padding: 0.4rem 0.9rem; font-size: 0.85rem; }
+
+    .btn-large {
+      padding: 0.9rem 2rem;
+      font-size: 1.1rem;
+      width: 100%;
+    }
+
+    .btn-link {
+      background: none;
+      color: #e94560;
+      padding: 0.3rem 0;
+      font-size: 0.9rem;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .btn-link:hover { opacity: 0.8; transform: none; }
+
+    .btn-trakt {
+      background: #ed1c24;
+      padding: 0.9rem 2rem;
+      font-size: 1.1rem;
+      width: 100%;
+    }
+
+    /* Forms */
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 0.35rem;
+      color: #ccc;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 0.65rem 0.9rem;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      background: #1a1a2e;
+      color: #eee;
+      font-family: inherit;
+      font-size: 0.9rem;
+      transition: border-color 0.2s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+
+    /* Token / URL display blocks */
+    .mono-block {
+      position: relative;
+      background: #0d1117;
+      border: 1px solid #2a2a4a;
+      border-radius: 8px;
+      padding: 1rem 3rem 1rem 1rem;
+      margin-bottom: 0.75rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: #7ee787;
+    }
+
+    .mono-block .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: #2a2a4a;
+      border: none;
+      border-radius: 6px;
+      color: #eee;
+      padding: 0.3rem 0.6rem;
+      font-size: 0.75rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+
+    .mono-block .copy-btn:hover { background: #3a3a5a; }
+
+    .mono-block.url-block { color: #aaa; }
+
+    /* Messages */
+    .warning {
+      background: rgba(243, 156, 18, 0.1);
+      border: 1px solid rgba(243, 156, 18, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: #f1c40f;
+      margin-bottom: 1rem;
+    }
+
+    .warning strong { display: block; margin-bottom: 0.25rem; }
+
+    .success-msg {
+      background: rgba(46, 204, 113, 0.1);
+      border: 1px solid rgba(46, 204, 113, 0.3);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: #2ecc71;
+      margin-bottom: 1rem;
+    }
+
+    .error-msg {
+      color: #e74c3c;
+      font-size: 0.85rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+
+    .error-msg.visible { display: block; }
+
+    /* Status indicators */
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 20px;
+      font-weight: 500;
+    }
+
+    .status-connected {
+      background: rgba(46, 204, 113, 0.15);
+      color: #2ecc71;
+    }
+
+    .status-disconnected {
+      background: rgba(149, 165, 166, 0.15);
+      color: #95a5a6;
+    }
+
+    /* Layout helpers */
+    .cards-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    @media (max-width: 540px) {
+      .cards-grid { grid-template-columns: 1fr; }
+    }
+
+    .cards-grid .card { margin-bottom: 0; }
+
+    .install-section { text-align: center; }
+
+    .management-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid #2a2a4a;
+    }
+
+    .management-row:last-child { border-bottom: none; }
+    .management-row span { font-size: 0.9rem; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #2a2a4a;
+      margin: 1.5rem 0;
+    }
+
+    .collapsible { display: none; }
+    .collapsible.visible { display: block; }
+
+    .privacy-note {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 1em;
+      height: 1em;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Confirmation overlay */
+    .confirm-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .confirm-overlay.visible { display: flex; }
+
+    .confirm-dialog {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 1.5rem;
+      max-width: 400px;
+      width: 90%;
+      text-align: center;
+    }
+
+    .confirm-dialog h3 { margin-bottom: 0.75rem; }
+    .confirm-dialog p { font-size: 0.9rem; color: #bbb; margin-bottom: 1.25rem; }
+    .confirm-dialog .btn-row { display: flex; gap: 0.75rem; justify-content: center; }
+
+    /* Deep link iframe */
+    .deep-link-frame { display: none; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>Bender</h1>
+    <p>Personalized movie &amp; TV recommendations based on your watch history</p>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 1: First Visit (no installId) -->
+  <!-- ============================================================ -->
+  <div id="state-welcome" class="state">
+
+    <div class="card">
+      <a class="btn btn-trakt" id="btn-trakt-start" href="#" style="display:none;">
+        Connect with Trakt
+      </a>
+
+      <hr class="divider">
+
+      <button class="btn btn-link" id="btn-show-advanced" onclick="toggleAdvanced()">
+        Advanced: Connect with Stremio credentials
+      </button>
+
+      <div id="advanced-stremio" class="collapsible">
+        <div class="warning" style="font-size:0.8rem; margin-top:0.75rem;">
+          Your credentials are encrypted and stored securely, but this requires trusting this addon server.
+        </div>
+        <div class="form-group">
+          <label for="adv-stremio-email">Email</label>
+          <input type="email" id="adv-stremio-email" placeholder="your@email.com">
+        </div>
+        <div class="form-group">
+          <label for="adv-stremio-password">Password</label>
+          <input type="password" id="adv-stremio-password" placeholder="Password">
+        </div>
+        <button class="btn btn-secondary" id="btn-adv-stremio" onclick="advancedStremioConnect()">
+          Connect Stremio
+        </button>
+        <div id="error-adv-stremio" class="error-msg"></div>
+      </div>
+    </div>
+
+    <p class="privacy-note">
+      We store encrypted tokens to access your watch history.
+      You can disconnect and delete all data anytime.
+    </p>
+
+    <hr class="divider">
+
+    <button class="btn btn-link" onclick="toggleRecoverForm()">
+      Already have an install? Manage it
+    </button>
+    <div id="recover-form" class="collapsible">
+      <div class="card" style="margin-top:0.75rem;">
+        <div class="form-group">
+          <label for="recover-id">Install ID</label>
+          <input type="text" id="recover-id" placeholder="Your install ID">
+        </div>
+        <div class="form-group">
+          <label for="recover-token">Manage Token</label>
+          <input type="text" id="recover-token" placeholder="Your manage token">
+        </div>
+        <button class="btn btn-secondary" id="btn-recover" onclick="recoverInstall()">
+          Recover Access
+        </button>
+        <div id="error-recover" class="error-msg"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 2: Success / Install (installId + ready) -->
+  <!-- ============================================================ -->
+  <div id="state-success" class="state">
+
+    <div class="success-msg">You're all set!</div>
+
+    <div class="card install-section">
+      <h3 style="justify-content:center;">Install in Stremio</h3>
+      <p style="margin-bottom:1.25rem;">Your recommendations addon is ready. Install it now.</p>
+      <a class="btn btn-primary btn-large" id="btn-install-success" href="#">
+        Install in Stremio
+      </a>
+      <div class="mono-block url-block" style="margin-top:1rem;">
+        <span id="success-manifest-url"></span>
+        <button class="copy-btn" onclick="copyText('success-manifest-url', this)">Copy</button>
+      </div>
+      <p style="font-size:0.8rem; color:#888; margin-top:0.5rem;">Or copy the HTTP manifest URL above for manual installation.</p>
+    </div>
+
+    <div class="card">
+      <h3>Your Management Link</h3>
+      <p>Save this link to manage your installation later (do not share):</p>
+      <div class="mono-block url-block">
+        <span id="success-manage-url"></span>
+        <button class="copy-btn" onclick="copyText('success-manage-url', this)">Copy</button>
+      </div>
+    </div>
+
+    <button class="btn btn-link" onclick="toggleRecoveryToken()">Recovery token (advanced)</button>
+    <div id="recovery-token-section" class="collapsible">
+      <div class="card" style="margin-top:0.75rem;">
+        <div id="recovery-token-display">
+          <div class="mono-block">
+            <span id="recovery-token-value"></span>
+            <button class="copy-btn" onclick="copyText('recovery-token-value', this)">Copy</button>
+          </div>
+          <div class="warning">
+            <strong>Save this token now</strong>
+            You need it to recover access if your session expires. It cannot be retrieved again.
+          </div>
+        </div>
+        <div id="recovery-token-gone" style="display:none;">
+          <p style="color:#888; font-size:0.85rem;">Token was shown during initial setup and can only be viewed once.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- STATE 3: Manage (installId, no ready) -->
+  <!-- ============================================================ -->
+  <div id="state-manage" class="state">
+
+    <!-- Active session view -->
+    <div id="manage-active">
+      <div class="card">
+        <h3>Connections</h3>
+        <div class="cards-grid">
+
+          <div class="card" id="manage-trakt-card" style="display:none;">
+            <h3>
+              <span>&#127916;</span> Trakt
+            </h3>
+            <div id="manage-trakt-status" class="status-indicator status-disconnected" style="margin-bottom:0.75rem;">
+              <span id="manage-trakt-icon">&#9675;</span>
+              <span id="manage-trakt-text">Not connected</span>
+            </div>
+            <br>
+            <a class="btn btn-primary btn-small" id="btn-manage-connect-trakt" href="#" onclick="window.location.href=BASE+'/trakt/auth';return false;">Connect Trakt</a>
+            <button class="btn btn-danger btn-small" id="btn-manage-disconnect-trakt" style="display:none;" onclick="disconnectService('trakt')">Disconnect</button>
+          </div>
+
+          <div class="card">
+            <h3>
+              <span>&#128253;</span> Stremio
+            </h3>
+            <div id="manage-stremio-status" class="status-indicator status-disconnected" style="margin-bottom:0.75rem;">
+              <span id="manage-stremio-icon">&#9675;</span>
+              <span id="manage-stremio-text">Not connected</span>
+            </div>
+            <div id="manage-stremio-form">
+              <div class="form-group">
+                <label for="manage-stremio-email">Email</label>
+                <input type="email" id="manage-stremio-email" placeholder="your@email.com">
+              </div>
+              <div class="form-group">
+                <label for="manage-stremio-password">Password</label>
+                <input type="password" id="manage-stremio-password" placeholder="Password">
+              </div>
+              <button class="btn btn-secondary btn-small" id="btn-manage-connect-stremio" onclick="manageConnectStremio()">
+                Connect Stremio
+              </button>
+              <div id="error-manage-stremio" class="error-msg"></div>
+            </div>
+            <button class="btn btn-danger btn-small" id="btn-manage-disconnect-stremio" style="display:none;" onclick="disconnectService('stremio')">Disconnect</button>
+          </div>
+
+        </div>
+      </div>
+
+      <div id="manage-install-section" class="card install-section" style="display:none;">
+        <h3 style="justify-content:center;">Install in Stremio</h3>
+        <a class="btn btn-primary btn-large" id="btn-install-manage" href="#">
+          Install in Stremio
+        </a>
+        <div class="mono-block url-block" style="margin-top:1rem;">
+          <span id="manage-manifest-url"></span>
+          <button class="copy-btn" onclick="copyText('manage-manifest-url', this)">Copy</button>
+        </div>
+      </div>
+
+      <hr class="divider">
+
+      <div class="card">
+        <h3>Danger Zone</h3>
+        <button class="btn btn-danger btn-small" onclick="showDeleteConfirm()">
+          Delete All Data
+        </button>
+        <div id="error-management" class="error-msg"></div>
+      </div>
+    </div>
+
+    <!-- Expired session view -->
+    <div id="manage-expired" style="display:none;">
+      <div class="card">
+        <h3>Session Expired</h3>
+        <p>Enter your recovery token to regain access.</p>
+        <div class="form-group">
+          <label for="expired-recover-id">Install ID</label>
+          <input type="text" id="expired-recover-id" readonly>
+        </div>
+        <div class="form-group">
+          <label for="expired-recover-token">Manage Token</label>
+          <input type="text" id="expired-recover-token" placeholder="Your manage token">
+        </div>
+        <button class="btn btn-secondary" id="btn-expired-recover" onclick="recoverFromExpired()">
+          Recover Access
+        </button>
+        <div id="error-expired-recover" class="error-msg"></div>
+      </div>
+    </div>
+
+    <!-- Install not found / deleted view -->
+    <div id="manage-not-found" style="display:none;">
+      <div class="card">
+        <h3>Install Not Found</h3>
+        <p>This installation has been deleted or does not exist. You can create a new one.</p>
+        <button class="btn btn-primary" onclick="history.pushState(null,'',BASE+'/configure');enterWelcomeState();">
+          Start Fresh
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Delete confirmation overlay -->
+<div id="confirm-overlay" class="confirm-overlay">
+  <div class="confirm-dialog">
+    <h3>Delete All Data?</h3>
+    <p>This will permanently remove your installation and all connected accounts. This action cannot be undone.</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="hideDeleteConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="btn-confirm-delete" onclick="deleteAllData()">Delete Everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden iframe for stremio:// deep link (best-effort) -->
+<iframe id="deep-link-frame" class="deep-link-frame"></iframe>
+
+<script>
+  // Base path for API calls and links
+  var BASE = window.location.pathname.replace(/\/configure\/?$/, '');
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+  var currentInstallId = null;
+  var pendingTokenFetched = false;
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  function showState(id) {
+    var states = document.querySelectorAll('.state');
+    for (var i = 0; i < states.length; i++) states[i].classList.remove('active');
+    document.getElementById(id).classList.add('active');
+  }
+
+  function showError(id, msg) {
+    var el = document.getElementById(id);
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function hideError(id) {
+    document.getElementById(id).classList.remove('visible');
+  }
+
+  function setLoading(btnId, loading) {
+    var btn = document.getElementById(btnId);
+    if (!btn) return;
+    if (loading) {
+      btn.disabled = true;
+      btn.dataset.origText = btn.textContent;
+      while (btn.firstChild) btn.removeChild(btn.firstChild);
+      var s = document.createElement('span');
+      s.className = 'spinner';
+      btn.appendChild(s);
+      btn.appendChild(document.createTextNode(' Loading...'));
+    } else {
+      btn.disabled = false;
+      var orig = btn.dataset.origText;
+      if (orig) {
+        while (btn.firstChild) btn.removeChild(btn.firstChild);
+        btn.appendChild(document.createTextNode(orig));
+      }
+    }
+  }
+
+  function copyText(spanId, btnEl) {
+    var text = document.getElementById(spanId).textContent;
+    navigator.clipboard.writeText(text).then(function() {
+      var orig = btnEl.textContent;
+      btnEl.textContent = 'Copied!';
+      setTimeout(function() { btnEl.textContent = orig; }, 1500);
+    });
+  }
+
+  function buildManifestUrls(installId) {
+    var hostAndPath = window.location.host + BASE;
+    var cfg = encodeURIComponent(JSON.stringify({ installId: installId }));
+    return {
+      stremio: 'stremio://' + hostAndPath + '/' + cfg + '/manifest.json',
+      http: window.location.protocol + '//' + hostAndPath + '/' + cfg + '/manifest.json',
+    };
+  }
+
+  function buildManageUrl(installId) {
+    return window.location.protocol + '//' + window.location.host + BASE + '/configure?installId=' + installId;
+  }
+
+  function attemptDeepLink(stremioUrl) {
+    try {
+      document.getElementById('deep-link-frame').src = stremioUrl;
+    } catch (_) {}
+  }
+
+  function warmRecommendations(installId) {
+    var cfg = encodeURIComponent(JSON.stringify({ installId: installId }));
+    var prefix = BASE + '/' + cfg;
+    fetch(prefix + '/catalog/movie/bender-movies.json').catch(function() {});
+    fetch(prefix + '/catalog/series/bender-series.json').catch(function() {});
+  }
+
+  function logClientEvent(event, installId) {
+    fetch(BASE + '/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event: event, installId: installId || null }),
+    }).catch(function() {});
+  }
+
+  // ---------------------------------------------------------------------------
+  // Toggle helpers
+  // ---------------------------------------------------------------------------
+
+  function toggleAdvanced() {
+    document.getElementById('advanced-stremio').classList.toggle('visible');
+  }
+
+  function toggleRecoverForm() {
+    document.getElementById('recover-form').classList.toggle('visible');
+  }
+
+  function toggleRecoveryToken() {
+    document.getElementById('recovery-token-section').classList.toggle('visible');
+  }
+
+  // ---------------------------------------------------------------------------
+  // State 1: Welcome
+  // ---------------------------------------------------------------------------
+
+  function enterWelcomeState() {
+    // Reset success-state flags so a second onboarding flow fetches the token
+    pendingTokenFetched = false;
+    document.getElementById('recovery-token-value').textContent = '';
+    document.getElementById('recovery-token-section').classList.remove('visible');
+
+    showState('state-welcome');
+    // Check if Trakt is configured to show/hide the CTA
+    fetch(BASE + '/api/config').then(function(r) { return r.json(); }).then(function(data) {
+      var btn = document.getElementById('btn-trakt-start');
+      if (data.traktConfigured) {
+        btn.style.display = '';
+        btn.href = BASE + '/trakt/start';
+      } else {
+        btn.style.display = 'none';
+        // Show advanced form by default when no Trakt
+        document.getElementById('advanced-stremio').classList.add('visible');
+        document.getElementById('btn-show-advanced').style.display = 'none';
+      }
+    }).catch(function() {});
+
+    logClientEvent('page_visit');
+  }
+
+  // ---------------------------------------------------------------------------
+  // State 2: Success
+  // ---------------------------------------------------------------------------
+
+  function enterSuccessState(installId) {
+    currentInstallId = installId;
+    showState('state-success');
+
+    var urls = buildManifestUrls(installId);
+    document.getElementById('btn-install-success').href = urls.stremio;
+    document.getElementById('success-manifest-url').textContent = urls.http;
+    document.getElementById('success-manage-url').textContent = buildManageUrl(installId);
+
+    // Deep link click tracking
+    document.getElementById('btn-install-success').onclick = function() {
+      logClientEvent('deep_link_click', installId);
+      return true; // allow default href navigation
+    };
+
+    // Fetch one-time pending token FIRST, before URL manipulation
+    if (!pendingTokenFetched) {
+      pendingTokenFetched = true;
+      fetch(BASE + '/api/install/pending-token', { credentials: 'same-origin' })
+        .then(function(r) {
+          if (!r.ok) return { manageToken: null };
+          return r.json();
+        })
+        .then(function(data) {
+          if (data.manageToken) {
+            document.getElementById('recovery-token-value').textContent = data.manageToken;
+            document.getElementById('recovery-token-display').style.display = '';
+            document.getElementById('recovery-token-gone').style.display = 'none';
+          } else {
+            document.getElementById('recovery-token-display').style.display = 'none';
+            document.getElementById('recovery-token-gone').style.display = '';
+          }
+          // Strip ready=1 from URL after token is fetched
+          history.replaceState(null, '', BASE + '/configure?installId=' + installId);
+        })
+        .catch(function() {
+          document.getElementById('recovery-token-display').style.display = 'none';
+          document.getElementById('recovery-token-gone').style.display = '';
+          history.replaceState(null, '', BASE + '/configure?installId=' + installId);
+        });
+    }
+
+    // Warm recommendations (best-effort)
+    warmRecommendations(installId);
+
+    // Attempt stremio:// deep link via hidden iframe (best-effort)
+    attemptDeepLink(buildManifestUrls(installId).stremio);
+  }
+
+  // ---------------------------------------------------------------------------
+  // State 3: Manage
+  // ---------------------------------------------------------------------------
+
+  function enterManageState(installId) {
+    currentInstallId = installId;
+    showState('state-manage');
+
+    fetchManageStatus(installId);
+  }
+
+  function showManageView(view) {
+    document.getElementById('manage-active').style.display = view === 'active' ? '' : 'none';
+    document.getElementById('manage-expired').style.display = view === 'expired' ? '' : 'none';
+    document.getElementById('manage-not-found').style.display = view === 'not-found' ? '' : 'none';
+  }
+
+  async function fetchManageStatus(installId) {
+    try {
+      var res = await fetch(BASE + '/api/install/' + installId + '/status', {
+        credentials: 'same-origin',
+      });
+
+      if (res.status === 404) {
+        showManageView('not-found');
+        return;
+      }
+
+      if (res.status === 401) {
+        showManageView('expired');
+        document.getElementById('expired-recover-id').value = installId;
+        return;
+      }
+
+      if (!res.ok) {
+        showManageView('expired');
+        document.getElementById('expired-recover-id').value = installId;
+        return;
+      }
+
+      var data = await res.json();
+      showManageView('active');
+      updateManageUI(data, installId);
+    } catch (e) {
+      showManageView('expired');
+      document.getElementById('expired-recover-id').value = installId;
+    }
+  }
+
+  function updateManageUI(data, installId) {
+    var traktConfigured = data.traktConfigured !== false;
+    var traktConnected = data.hasTrakt === true;
+    var stremioConnected = data.hasStremio === true;
+    var anyConnected = traktConnected || stremioConnected;
+
+    // Trakt card
+    document.getElementById('manage-trakt-card').style.display = traktConfigured ? '' : 'none';
+    if (traktConnected) {
+      document.getElementById('manage-trakt-status').className = 'status-indicator status-connected';
+      document.getElementById('manage-trakt-icon').textContent = '\u2713';
+      document.getElementById('manage-trakt-text').textContent = 'Connected';
+      document.getElementById('btn-manage-connect-trakt').style.display = 'none';
+      document.getElementById('btn-manage-disconnect-trakt').style.display = '';
+    } else {
+      document.getElementById('manage-trakt-status').className = 'status-indicator status-disconnected';
+      document.getElementById('manage-trakt-icon').textContent = '\u25CB';
+      document.getElementById('manage-trakt-text').textContent = 'Not connected';
+      document.getElementById('btn-manage-connect-trakt').style.display = '';
+      document.getElementById('btn-manage-disconnect-trakt').style.display = 'none';
+    }
+
+    // Stremio card
+    if (stremioConnected) {
+      document.getElementById('manage-stremio-status').className = 'status-indicator status-connected';
+      document.getElementById('manage-stremio-icon').textContent = '\u2713';
+      document.getElementById('manage-stremio-text').textContent = 'Connected';
+      document.getElementById('manage-stremio-form').style.display = 'none';
+      document.getElementById('btn-manage-disconnect-stremio').style.display = '';
+    } else {
+      document.getElementById('manage-stremio-status').className = 'status-indicator status-disconnected';
+      document.getElementById('manage-stremio-icon').textContent = '\u25CB';
+      document.getElementById('manage-stremio-text').textContent = 'Not connected';
+      document.getElementById('manage-stremio-form').style.display = '';
+      document.getElementById('btn-manage-disconnect-stremio').style.display = 'none';
+    }
+
+    // Install section
+    if (anyConnected) {
+      document.getElementById('manage-install-section').style.display = '';
+      var urls = buildManifestUrls(installId);
+      document.getElementById('btn-install-manage').href = urls.stremio;
+      document.getElementById('btn-install-manage').onclick = function() {
+        logClientEvent('deep_link_click', installId);
+        return true;
+      };
+      document.getElementById('manage-manifest-url').textContent = urls.http;
+    } else {
+      document.getElementById('manage-install-section').style.display = 'none';
+    }
+  }
+
+  async function manageConnectStremio() {
+    hideError('error-manage-stremio');
+    var email = document.getElementById('manage-stremio-email').value.trim();
+    var password = document.getElementById('manage-stremio-password').value;
+    if (!email || !password) {
+      showError('error-manage-stremio', 'Email and password are required.');
+      return;
+    }
+    setLoading('btn-manage-connect-stremio', true);
+    try {
+      var res = await fetch(BASE + '/api/install/stremio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ installId: currentInstallId, email: email, password: password }),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Failed to connect Stremio');
+      }
+      document.getElementById('manage-stremio-email').value = '';
+      document.getElementById('manage-stremio-password').value = '';
+      await fetchManageStatus(currentInstallId);
+    } catch (e) {
+      showError('error-manage-stremio', e.message);
+    } finally {
+      setLoading('btn-manage-connect-stremio', false);
+    }
+  }
+
+  async function disconnectService(service) {
+    hideError('error-management');
+    try {
+      var res = await fetch(BASE + '/admin/disconnect/' + currentInstallId + '/' + service, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Failed to disconnect ' + service);
+      }
+      await fetchManageStatus(currentInstallId);
+    } catch (e) {
+      showError('error-management', e.message);
+    }
+  }
+
+  function showDeleteConfirm() {
+    document.getElementById('confirm-overlay').classList.add('visible');
+  }
+
+  function hideDeleteConfirm() {
+    document.getElementById('confirm-overlay').classList.remove('visible');
+  }
+
+  async function deleteAllData() {
+    setLoading('btn-confirm-delete', true);
+    try {
+      var res = await fetch(BASE + '/admin/install/' + currentInstallId, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Failed to delete data');
+      }
+      hideDeleteConfirm();
+      currentInstallId = null;
+      history.pushState(null, '', BASE + '/configure');
+      enterWelcomeState();
+    } catch (e) {
+      hideDeleteConfirm();
+      showError('error-management', e.message);
+    } finally {
+      setLoading('btn-confirm-delete', false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Advanced Stremio Connect (State 1 → State 2)
+  // ---------------------------------------------------------------------------
+
+  async function advancedStremioConnect() {
+    hideError('error-adv-stremio');
+    var email = document.getElementById('adv-stremio-email').value.trim();
+    var password = document.getElementById('adv-stremio-password').value;
+    if (!email || !password) {
+      showError('error-adv-stremio', 'Email and password are required.');
+      return;
+    }
+    setLoading('btn-adv-stremio', true);
+    try {
+      var res = await fetch(BASE + '/api/install/stremio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ email: email, password: password, createInstall: true }),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Failed to connect Stremio');
+      }
+      var data = await res.json();
+      history.pushState(null, '', BASE + '/configure?installId=' + data.installId + '&ready=1');
+      enterSuccessState(data.installId);
+    } catch (e) {
+      showError('error-adv-stremio', e.message);
+    } finally {
+      setLoading('btn-adv-stremio', false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Recovery (from various states)
+  // ---------------------------------------------------------------------------
+
+  async function recoverInstall() {
+    hideError('error-recover');
+    var installId = document.getElementById('recover-id').value.trim();
+    var token = document.getElementById('recover-token').value.trim();
+    if (!installId || !token) {
+      showError('error-recover', 'Both fields are required.');
+      return;
+    }
+    setLoading('btn-recover', true);
+    try {
+      var res = await fetch(BASE + '/admin/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ installId: installId, manageToken: token }),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Recovery failed. Check your install ID and token.');
+      }
+      history.pushState(null, '', BASE + '/configure?installId=' + installId);
+      enterManageState(installId);
+    } catch (e) {
+      showError('error-recover', e.message);
+    } finally {
+      setLoading('btn-recover', false);
+    }
+  }
+
+  async function recoverFromExpired() {
+    hideError('error-expired-recover');
+    var installId = document.getElementById('expired-recover-id').value.trim();
+    var token = document.getElementById('expired-recover-token').value.trim();
+    if (!installId || !token) {
+      showError('error-expired-recover', 'Please enter your manage token.');
+      return;
+    }
+    setLoading('btn-expired-recover', true);
+    try {
+      var res = await fetch(BASE + '/admin/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ installId: installId, manageToken: token }),
+      });
+      if (!res.ok) {
+        var err = await res.json().catch(function() { return {}; });
+        throw new Error(err.error || 'Recovery failed. Check your token.');
+      }
+      // Reload manage state with fresh session
+      await fetchManageStatus(installId);
+    } catch (e) {
+      showError('error-expired-recover', e.message);
+    } finally {
+      setLoading('btn-expired-recover', false);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Initialization — route to the correct state
+  // ---------------------------------------------------------------------------
+
+  (function init() {
+    var params = new URLSearchParams(window.location.search);
+    var installId = params.get('installId');
+    var ready = params.get('ready');
+    var traktConnected = params.get('trakt'); // backward compat: ?trakt=connected
+    var notFound = params.get('notfound');
+
+    if (notFound === '1') {
+      // Redirected here because the install was deleted (e.g. reconnect callback)
+      showState('state-manage');
+      showManageView('not-found');
+    } else if (installId && (ready === '1' || traktConnected === 'connected')) {
+      // State 2: Success
+      enterSuccessState(installId);
+    } else if (installId) {
+      // State 3: Manage
+      enterManageState(installId);
+    } else {
+      // State 1: Welcome
+      enterWelcomeState();
+    }
+  })();
+</script>
+
+</body>
+</html>
